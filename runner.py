@@ -13,7 +13,7 @@ def main():
     p = argparse.ArgumentParser(prog="runner", description="Project runner")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    # ingest
+    # ingest -> data/
     pi = sub.add_parser("ingest", help="Download 1m bars -> data/")
     pi.add_argument("--symbols", nargs="+", required=True, help="e.g. SPY QQQ AAPL")
     pi.add_argument("--period", default="1d", help="1d/5d/7d")
@@ -28,6 +28,9 @@ def main():
     ps = sub.add_parser("signal", help="Compute MA20/RSI14 & print LONG/FLAT")
     ps.add_argument("--symbols", nargs="*", help="limit to tickers, e.g. AAPL SPY")
 
+    # simple signal analytics
+    sub.add_parser("analyze", help="Summarize logs/signals.csv")
+
     # all-in-one: ingest -> normalize -> signal
     pa = sub.add_parser("all", help="ingest -> normalize -> signal")
     pa.add_argument("--symbols", nargs="+", required=True)
@@ -37,24 +40,27 @@ def main():
     args = p.parse_args()
 
     if args.cmd == "ingest":
-        run([PY, "ingest.py", "--symbols", *args.symbols, "--period", args.period])
+        run([PY, "src/core/ingest.py", "--symbols", *args.symbols, "--period", args.period])
 
     elif args.cmd == "inspect":
-        run([PY, "inspect_data.py"])
+        run([PY, "src/core/inspect_data.py"])
 
     elif args.cmd == "normalize":
-        run([PY, "normalize.py"])
+        run([PY, "src/core/normalize.py"])
 
     elif args.cmd == "signal":
-        cmd = [PY, "gen_signal.py"]
+        cmd = [PY, "src/signals/gen_signal.py"]
         if args.symbols:
             cmd += ["--symbols", *args.symbols]
         run(cmd)
 
+    elif args.cmd == "analyze":
+        run([PY, "src/signals/analyze_signals.py"])
+
     elif args.cmd == "all":
-        run([PY, "ingest.py", "--symbols", *args.symbols, "--period", args.period])
-        run([PY, "normalize.py"])
-        cmd = [PY, "gen_signal.py"]
+        run([PY, "src/core/ingest.py", "--symbols", *args.symbols, "--period", args.period])
+        run([PY, "src/core/normalize.py"])
+        cmd = [PY, "src/signals/gen_signal.py"]
         if args.signal_only:
             cmd += ["--symbols", *args.signal_only]
         run(cmd)
