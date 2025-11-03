@@ -4,14 +4,32 @@ import yfinance as yf
 from datetime import datetime
 
 def fetch_1m(symbol: str, period: str = "1d") -> pd.DataFrame:
+
     df = yf.download(symbol, interval="1m", period=period, auto_adjust=True, progress=False)
     if df.empty:
         raise RuntimeError(f"No data for {symbol}")
-    df = df.rename(columns=str.lower)
-    df.index = pd.to_datetime(df.index)
-    df.index.name = "time"
-    df["symbol"] = symbol
-    return df.reset_index()
+
+    # Flatten columns: handle both MultiIndex and single-index cases
+    if isinstance(df.columns, pd.MultiIndex):
+        # top level is Price: Close/High/Low/Open/Volume ; second level is Ticker (e.g., SPY)
+        rename = {"Open": "open", "High": "high", "Low": "low", "Close": "close", "Volume": "volume"}
+        df.columns = [rename.get(a, str(a).lower()) for (a, _ticker) in df.columns]
+    else:
+        df.columns = [str(c).lower().replace(" ", "_") for c in df.columns]  # e.g., open, high, ...
+
+    # ensure we have the expected fields (Adj Close is dropped by auto_adjust=True)
+    needed = {"open","high","low","close","volume"}
+    missing = needed - set(df.columns)
+    if missing:
+        raise RuntimeError(f"{symbol}: missing columns after flatten: {missing} (got {list(df.columns)})")
+
+    # move index -> time column, add symbol, sort
+    df = df.rename_axis("time").reset_index()
+    df["time"] = pd.to_datetime(df["time"], utc=True)
+    df["symbol"] = symbol.upper()
+    df = df.sort_values("time")
+
+    return df[["time","open","high","low","close","volume","symbol"]]
 
 def save_parquet(df: pd.DataFrame, out_dir: str = "data"):
     os.makedirs(out_dir, exist_ok=True)
