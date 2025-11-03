@@ -1,6 +1,7 @@
 import argparse, glob, os, pandas as pd
 # Tells us how overbought or oversold the equity is
 from ta.momentum import RSIIndicator
+from zoneinfo import ZoneInfo
 
 def load_latest_norm(path):
     df = pd.read_parquet(path)
@@ -20,6 +21,24 @@ def rule_long_flat(row):
     if row["close"] > row["ma20"] and row["rsi14"] > 55:
         return "LONG"
     return "FLAT"
+
+def log_signal(row, sym, sig, path="logs/signals.csv"):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    et = row["time"].tz_convert(ZoneInfo("America/New_York"))
+    header = not os.path.exists(path)
+    with open(path, "a") as f:
+        if header:
+            f.write("time_utc,time_et,symbol,close,ma20,rsi14,signal\n")
+        f.write(",".join([
+            row["time"].isoformat(),
+            et.isoformat(),
+            sym,
+            f"{row['close']:.6f}",
+            f"{row['ma20']:.6f}",
+            f"{row['rsi14']:.3f}",
+            sig
+        ]) + "\n")
+
 
 def main():
     p = argparse.ArgumentParser()
@@ -43,6 +62,7 @@ def main():
         sig = rule_long_flat(last)
         print(f"{sym} | {last['time'].isoformat()} | close={last['close']:.2f} "
               f"| ma20={last['ma20']:.2f} | rsi14={last['rsi14']:.1f} | SIGNAL={sig}")
+        log_signal(last, sym, sig)
 
 if __name__ == "__main__":
     main()
